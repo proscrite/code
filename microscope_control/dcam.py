@@ -383,7 +383,7 @@ class Dcam:
 
         return cIdprop.value
 
-    def prop_getname(self, idprop):
+    def  prop_getname(self, idprop):
         """
         Get name of property
 
