@@ -73,16 +73,49 @@ def get_filters_to_snap():
         else:
             print('invalid key')
 
-
-def open_all_devices():
+def get_nframes():
     while True:
-        if not(camera.open() and wheel.open()):
-            if get_yes_no('Try again? y/n\n') is False:
-                return False
+        key = input('choose number of frames (default 400):\n')
+        if (key.isnumeric()) and (int(key) == 0):
+            return 400
+        elif (key.isnumeric()):
+            return int(key)
         else:
-            break
-    meter.open()
-    return True
+            print('invalid key')
+
+def get_expTime():
+    while True:
+        key = input('Choose exposure time (default 0.5):\n')
+        if (key.isnumeric()) and (int(key) == 0):
+            return 0.5
+        elif (key.isnumeric()):
+            return key
+        elif type(literal_eval(key)) == float:
+            return key
+        else:
+            print('invalid key')
+
+def print_dict(dict):
+    print()
+    for i in dict:
+        print(str(i) + ':\t' + dict[i])
+
+
+def print_image_set(image_set):
+    fig_12img, ax_12img = plt.subplots(3, 4)
+    fig_12img.tight_layout()
+    cut = 500
+
+    for row in range(3):
+        for col in range(4):
+            area = image_set[col + row * 4, cut:2048 - cut, cut:2048 - cut]
+            img = ax_12img[row, col].imshow(area)
+            title = str(FILTERS_BANDS[col + row * 4 + 1][0]) + '[nm], ' + str(FILTERS_BANDS[col + row * 4 + 1][1]) + '[nm]'
+            ax_12img[row, col].set_title(title)
+            ax_12img[row, col].axis('off')
+            fig_12img.colorbar(img, ax=ax_12img[row, col])
+    plt.show()  # block=False
+
 
 
 def close_all_devices():
