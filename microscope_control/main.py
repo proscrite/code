@@ -3,11 +3,13 @@ import time
 import os
 import matplotlib
 import numpy as np
+import pandas as pd
 from Constants import *
 from matplotlib import pyplot as plt
+from ast import literal_eval
 import Camera
 import Wheel
-import Meter
+import Meter2    # Meter2 for TLPMX (new API version), Meter for TLMP (older version)
 import saving
 #matplotlib.interactive(True)
 
@@ -26,114 +28,15 @@ def tif_file_name(filter_num, use_time=False):
         return str(filter_num) + "_" + FILTERS[filter_num] + "_" + time_date() + ".tif"
     return str(filter_num) + "_" + FILTERS[filter_num] + ".tif"
 
-
-def print_image_set(image_set):
-    fig_12img, ax_12img = plt.subplots(3, 4)
-    fig_12img.tight_layout()
-    cut = 500
-
-    for row in range(3):
-        for col in range(4):
-            area = image_set[col + row * 4, cut:2048 - cut, cut:2048 - cut]
-            img = ax_12img[row, col].imshow(area)
-            title = str(FILTERS_BANDS[col + row * 4 + 1][0]) + '[nm], ' + str(FILTERS_BANDS[col + row * 4 + 1][1]) + '[nm]'
-            ax_12img[row, col].set_title(title)
-            ax_12img[row, col].axis('off')
-            fig_12img.colorbar(img, ax=ax_12img[row, col])
-    plt.show()  # block=False
-
-
-def mean_power():
-    if meter.open(3):
-        print(meter.read())
-    meter.close()
-
-
-# def save_image(data, name, power):
-#     if data.dtype == np.uint16:
-#         imax = np.amax(data)
-#         if imax > 0:
-#             imul = int(65535 / imax)
-#             # print('Multiple %s' % imul)
-#             data = data * imul
-#             cv2.imwrite(name, data)  # check success?
-#             return True
-#     return False
-#
-#
-# def create_data_set(filter_to_snap=0, test_power=True):
-#     if camera.open() is False:
-#         return False
-#     if wheel.open() is False:
-#         return False
-#     start_time = time_date()
-#     power = None
-#     folder_name = IMAGE_SAVE_LOCATION + start_time
-#     os.mkdir(folder_name)
-#     directory = os.getcwd()
-#     os.chdir(directory)
-#     if filter_to_snap != 0:
-#         wheel.set_filter(filter_to_snap)
-#         camera.exposure_time(FILTERS_EXPOSER[filter_to_snap])
-#         data = camera.take_picture()
-#         name = folder_name + "\\" + tif_file_name(filter_to_snap, 1)
-#         save_image(data, name)
-#         return True
-#     data_set = np.zeros((12, 2048, 2048), dtype=np.uint16)
-#     for i in FILTERS:
-#         wheel.set_filter(i)
-#         camera.exposure_time(FILTERS_EXPOSER[i])
-#         data_set[i - 1] = camera.take_picture()
-#         name = folder_name + "\\" + tif_file_name(i, 1)
-#         save_image(np.copy(data_set[i - 1]), name)
-#
-#     if test_power:
-#         print('Measuring power: (may take a few seconds)')
-#         power = mean_power()
-#     if power is np.nan:
-#         name = NP_SAVE_LOCATION + start_time
-#     else:
-#         name = NP_SAVE_LOCATION + start_time + F'_{mean_power():.5g}' + '[W]'
-#     np.save(name, data_set)
-#     print('numpy file name is:\t' + name + '.npy')
-#     os.chdir(directory)
-#     return
-
-
-def take_images(name, filters, dark_img):
-    if filters != 0:
-        wheel.set_filter(filters)
-        camera.exposure_time(FILTERS_EXPOSER[filters])
-        data = camera.take_picture()
-        power = meter.read()
-        saving.save_tiff(data, -1, name, power, filters)
-    else:
-        data_set = np.zeros(1, dtype=data_struct)
-        data_set['date'][0] = np.double(time.time())
-        data_set['name'][0] = name
-        for i in range(NUMBER_OF_FILTERS):
-            wheel.set_filter(i+1)
-            camera.exposure_time(FILTERS_EXPOSER[i + 1])
-            data_set['images'][0][i] = camera.take_picture()
-        data_set['power'][0] = meter.read()
-        if dark_img:
-            input('Taking dark images\nCover laser and then press enter\n')
-            for i in range(NUMBER_OF_FILTERS):
-                wheel.set_filter(i + 1)
-                camera.exposure_time(FILTERS_EXPOSER[i + 1])
-                data_set['images'][0][i+12] = camera.take_picture()
-        num = saving.save_npy(data_set, name)
-        print('File number is:\t' + str(num))
-        saving.save_tiff(data_set['images'][0], num, name, data_set['power'][0])
-        print_image_set(data_set['images'][0])
-        print()
-
-
-def print_dict(dict):
-    print()
-    for i in dict:
-        print(str(i) + ':\t' + dict[i])
-
+def get_yes_no(question):
+    while True:
+        key = input(question)
+        if key == 'y':
+            return True
+        elif key == 'n':
+            return False
+        else:
+            print('invalid key')
 
 def get_sample_name():
     while True:
