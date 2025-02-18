@@ -6,7 +6,7 @@ import pandas as pd
 from Constants import *
 from matplotlib import pyplot as plt
 from ast import literal_eval
-import Camera
+from pylablib_DCAM.devices.DCAM import DCAMCamera
 import Wheel
 import Meter2    # Meter2 for TLPMX (new API version), Meter for TLMP (older version)
 import saving
@@ -105,19 +105,20 @@ global texp
 
 class Setup:
     def __init__(self):
-        self.camera = Camera.Camera()
+        # self.cam = Camera.Camera()
+        self.cam = DCAMCamera(idx=0)
         self.wheel = Wheel.Wheel()
         self.meter = Meter2.Meter()
         self.settings = pd.DataFrame()
         
         self.menu = \
             {
-            'i': (self.take_spectra, 'Taking images'),
+            'i': (self.take_spectra, 'Taking Spectra'),
             'f': (self.image_filter, 'Take single filter'),
             'a': (self.test, 'A test function'),
             'h': (0, 'List of commands'),
             'p': (self.mean_power, 'Get power reading'),
-            'camera': (self.show_prop_camera, 'Show camera proerties'),
+            'cam': (self.show_prop_camera, 'Show camera proerties'),
             's': (self.set_cam_properties, 'Set camera property'),
             'e': (self.set_exposure, 'Set camera exposure'),
             't': (self.time_evolution, 'Take time evolution'),
@@ -139,22 +140,22 @@ class Setup:
             print(i + ':\t' + menu[i][1])
 
     def take_single_frame(self, name, path, filters):
+        # print('Filters: ', filters)
         self.wheel.set_filter(filters)
-        self.camera.exposure_time(self.camera.exposure)
-        print('Camera exposure in single frame: ', self.camera.exposure)
-        data = self.camera.take_picture()
-        power = self.meter.read()
+        # self.cam.exposure_time(self.cam.exposure)
+        # print('Camera exposure: ', round(self.cam.get_exposure(), 2) )
+        data = self.cam.snap(timeout=15)
         # num = saving.save_npy(data, name)
-        saving.single_tif_save(data, path, name, power, filters)
+        saving.single_tif_save(data, path, name, filters)
 
     def take_images(self, name, filters):
         if filters != 0:
             rootpath = IMAGE_SINGLE_SAVE_LOCATION
             path = saving.check_path_save(rootpath, name)
             self.take_single_frame(name, path, filters)
-            power = self.meter.read()
-            print('Power after self.take_single_frame(): ', power)
-            self.settings = SetupSettings.add_settings_value(self.settings, 'Power(W)', power)
+            power = round(self.meter.read() * 1e6, 4)
+            self.settings = SetupSettings.add_settings_value(self.settings, 'POWER(uW)', power)
+            
             SetupSettings.write_settings(path, self.settings)
 
         else:
@@ -162,21 +163,21 @@ class Setup:
             data_set['date'][0] = np.double(time.time())
             data_set['name'][0] = name
             rootpath = IMAGE_SET_SAVE_LOCATION
-            print('Before loop: current exposure is %0.2f s \n' %(self.camera.exposure) )
+            # print('Before loop: current exposure is %0.2f s \n' %(self.cam.get_exposure()) )
 
             for i in range(11, -1, -1):
                 self.wheel.set_filter(i+1)
                 print("Current filter: %i" %(i+1))
-                self.camera.exposure_time(self.camera.exposure)
-                print('Current exposure is %0.2f s \n' %(self.camera.exposure) )
+                # self.cam.exposure_time(self.cam.exposure)
+                # print('Current exposure is %0.2f s \n' %(self.cam.exposure) )
                 
             #    camera.exposure_time(FILTERS_EXPOSER[i + 1])
-                data_set['images'][0][i] = self.camera.take_picture()
-            data_set['power'][0] = self.meter.read()
-
+                data_set['images'][0][i] = self.cam.snap(timeout=15)
+            
             save_path = saving.save_tif_set(data_set['images'][0], name, data_set['power'][0])
-            power = self.meter.read()
-            self.settings = SetupSettings.add_settings_value(self.settings, 'Power(W)', power)
+            power = round(self.meter.read() * 1e6, 4)
+
+            self.settings = SetupSettings.add_settings_value(self.settings, 'POWER(uW)', power)
 
             SetupSettings.write_settings(save_path, self.settings)
             print_image_set(data_set['images'][0])
@@ -188,10 +189,21 @@ class Setup:
             time.sleep(1)
         self.meter.close()
 
+    def open_cam(self):
+        self.cam.open()
+        self.cam.set_exposure(0.5)
+        while True:
+            if not self.cam.is_opened():
+                if get_yes_no('Camera failed opening. Try again? y/n\n') is False:
+                    return False
+            else:
+                break
+        return True
+    
     def open_all_devices(self):
         while True:
-            if not(self.camera.open() and self.wheel.open()):
-                if get_yes_no('Try again? y/n\n') is False:
+            if not self.wheel.open():
+                if get_yes_no('Filter wheel failed opening. Try again? y/n\n') is False:
                     return False
             else:
                 break
@@ -199,7 +211,7 @@ class Setup:
         return True
 
     def close_all_devices(self):
-        self.camera.close()
+        self.cam.close()
         self.wheel.close()
         self.meter.close()
 
@@ -235,7 +247,7 @@ class Setup:
                 if self.open_all_devices() is False:
                     return
                 self.take_images(name, filters)
-                self.close_all_devices()
+                # self.close_all_devices()
             else:
                 break
             
@@ -250,43 +262,42 @@ class Setup:
         question += '\nNumber of frames:\t %i \n' %nframes
         question += '\nTake image with this parameters? y/n\n'
         if get_yes_no(question):
-            if self.open_all_devices() is False:
-                return
             rootpath = IMAGE_TIMERUN_SAVE_LOCATION
             path = saving.check_path_save(rootpath, name)
             for i in range(nframes):
                 print("Frame nr. %i" %i)
                 self.take_single_frame(name, path, filters)
             SetupSettings.write_settings(path, self.settings)
-            self.close_all_devices()
+            # self.close_all_devices()
             
     def take_sequence(self):
         if self.open_all_devices() is False:
                 return
         print('Devices open, taking sequence')
-        data = self.camera.take_sequence()
+        data = self.cam.take_sequence()
         print(data)
 
     def set_exposure(self):
-        if self.camera.open() is False:
+        if self.cam.is_opened() is False:
             return
-        question = 'Current exposure is %0.2f s, do you want to change it? (y/n) \n' %(self.camera.exposure)
+        question = 'Current exposure is %0.2f s, do you want to change it? (y/n) \n' %(self.cam.get_exposure())
         if get_yes_no(question):
             texp = float(get_expTime())
-            self.camera.exposure_time(texp)
+            self.cam.set_exposure(texp)
             self.settings = SetupSettings.add_settings_value(self.settings, 'EXPOSURE_TIME', texp)
-        self.camera.close()
+        # self.cam.close()
 
     def show_prop_camera(self):
-        if self.camera.open() is False:
+        if self.cam.is_opened() is False:
             return
-        self.camera.show_prop_camera()
-        self.camera.close()
+        print(self.cam.get_all_attribute_values() )
+        time.sleep(3)
+        # self.cam.close()
 
     def set_cam_properties(self):
         if camera.open() is False:
             return
-        camera.show_prop_camera()
+        camera.get_all_attribute_values()
         camera.close()
 
     def test():
@@ -315,6 +326,8 @@ class Setup:
 
 def main():
     st = Setup()
+    st.open_all_devices()
+    st.open_cam()
     st.init_settings()
     # st.camera.open()
     # st.camera.exposure_time(EXPOSURE_TIME)
