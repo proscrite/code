@@ -54,20 +54,31 @@ def save_npy(data, name):
     return num
 
 
-def single_tif_save(data, name, power, filters):
+def check_path_save(rootpath, name):
     today = time.strftime(TIME_FORMAT_TODAY)
-    path = IMAGE_SINGLE_SAVE_LOCATION + today
+    path = rootpath + today + '\\' + name
 
+    try:
+        nsets = sorted(next(os.walk(path))[1])
+    except StopIteration:
+        if not os.path.exists(path): os.makedirs(path)
+        nsets = sorted(next(os.walk(path))[1])
+
+   ####### Check number of existing measurements in directory
+    try: 
+        last_set = int(nsets[-1])
+    except IndexError: last_set = 0
+
+   ####### Set current measurement as last_set + 1 (previously 'num')
+    path += '\\' + str(last_set+1)
     if not os.path.exists(path):
         os.makedirs(path)
+    return path
 
-    path += '\\' + name
 
-    if not os.path.exists(path):
-        os.makedirs(path)
-
-    path += '\\' + FILTERS[filters] + time.strftime('_%H-%M-%S') + '.tif'
-
+def single_tif_save(data, path, name, filters):
+    
+    path_file = path + '\\' + FILTERS[filters] + '_' + time.strftime('%H-%M-%S') + '.tif'
     imax = np.amax(data)
     if imax > 0:
         image_multiplayer = int(65535 / imax)
@@ -76,37 +87,18 @@ def single_tif_save(data, name, power, filters):
         image_multiplayer = 1
 
     img = Image.fromarray(data)
-    img.save(path)
-
-    # set_exif_field(path, 'ExposureTime', int(FILTERS_EXPOSER[filters]*1000))) # problem writing into
-    set_exif_field(path, 'ImageDescription', name)
-    set_exif_field(path, 'DateTimeOriginal', time.localtime())
-    set_exif_field(path, 'Artist', AURTHUR)
-    comment = 'Laser power:' + str(power) + ',Value stretch factor:' + str(image_multiplayer) \
-        + ',Exposure Time:' + str(int(FILTERS_EXPOSER[filters]*1000))
-    set_exif_field(path, 'XPComment', comment)
+    img.save(path_file)
 
 
-def save_tif_set(data, name, power, num):
-    today = time.strftime(TIME_FORMAT_TODAY)
-    path = IMAGE_SET_SAVE_LOCATION + today
+def save_tif_set(data, name, power):
+    rootpath = IMAGE_SET_SAVE_LOCATION
+    path = check_path_save(rootpath, name)
 
-    if not os.path.exists(path):
-        os.makedirs(path)
-
-    path += '\\' + name
-
-    if not os.path.exists(path):
-        os.makedirs(path)
-
-    path += '\\' + str(num)
-
-    if not os.path.exists(path):
-        os.makedirs(path)
     t = time.strftime('_%H-%M-%S')
     for filters in range(NUMBER_OF_FILTERS):
         path_file = path + '\\' + str(FILTERS[filters+1]) + t + '.tif'
-
+        print('Filter save: ', filters)
+        print(path_file)
         imax = np.amax(data[filters])
         if imax > 0:
             image_multiplayer = int(65535 / imax)
@@ -116,22 +108,22 @@ def save_tif_set(data, name, power, num):
 
         img = Image.fromarray(data[filters])
         img.save(path_file)
-
+        
+    return path
         # set_exif_field(path, 'ExposureTime', int(FILTERS_EXPOSER[filters]*1000))) # problem writing into
-        set_exif_field(path_file, 'ImageDescription', name)
-        set_exif_field(path_file, 'DateTimeOriginal', time.localtime())
-        set_exif_field(path_file, 'Artist', AURTHUR)
-        comment = 'Laser power:' + str(power) + ',Value stretch factor:' + str(image_multiplayer) \
-            + ',Exposure Time:' + str(int(FILTERS_EXPOSER[filters+1]*1000))
-        set_exif_field(path, 'XPComment', comment)
+        # set_exif_field(path_file, 'ImageDescription', name)
+        # set_exif_field(path_file, 'DateTimeOriginal', time.localtime())
+        # set_exif_field(path_file, 'Artist', AURTHUR)
+        # comment = 'Laser power:' + str(power) + ',Value stretch factor:' + str(image_multiplayer) \
+        #     + ',Exposure Time:' + str(int(FILTERS_EXPOSER[filters+1]*1000))
+        # set_exif_field(path, 'XPComment', comment)
 
-
-def save_tiff(data, num, name, power, filters=1):
-    print('Saving .tif files.')
-    if num == -1:
-        single_tif_save(data, name, power, filters)
-    else:
-        save_tif_set(data, name, power, num)
+# def save_tiff(data, rootpath, num, name, power, filters=1):
+#     print('Saving .tif files.')
+#     if num == -1:
+#         single_tif_save(data, rootpath, name, power, filters)
+#     else:
+#         save_tif_set(data, name, power, num)
 
 
 if __name__ == '__main__':
@@ -146,15 +138,3 @@ if __name__ == '__main__':
         data = np.random.random((10, 10))
         save_npy(data, 'test2')
     """
-
-
-
-
-
-
-
-
-
-
-
-
