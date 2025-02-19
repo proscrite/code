@@ -16,28 +16,39 @@ filtAv = [438, 472, 549, 575, 586, 605, 631, 661, 676, 692]
 filtUn = np.array([28, 35, 21, 35, 26, 22, 28, 26, 29, 47]) / 2
 filtQE = np.array([0.52654585, 0.61510198, 0.67157561, 0.70026282, 0.71884383, 0.72505143, 0.72530424, 0.71414267, 0.68976776, 0.6438945])
 
-def prepare_spectrum(files, roi):
+def prepare_spectrum(files, roi = None):
     nfilt = len(files)
-   
-    # img = io.imread(files[0]).astype(np.int64)
+    
+    img0 = io.imread(files[0]).astype(np.int64)
     imdark = io.imread(files[-1]).astype(np.int64)
 
-    imroi = imdark[roi[0]:roi[1], roi[2]:roi[3]]
-    roiSize = imroi.shape[0] * imroi.shape[1]
-    # offset = 100 * roiSize
+    _, best_area, best_region = find_fov(img0, flag_plot=False)    # Refined FOV search on no_filter image
+    
+    circ_mask = offset_circular_mask(img, best_region, best_area, flag_plot=False)  # Rough (perfect) circular mask
+    img0[~circ_mask] = 0
+    imdark[~circ_mask] = 0
+    imsize = circ_mask[circ_mask].shape    # Number of pixels in the circular mask
+    # imsize = img0.shape[0] * img0.shape[1]
+    
+    if roi != None:
+        imroi = img0[roi[0]:roi[1], roi[2]:roi[3]]
+        imsize = imroi.shape[0] * imroi.shape[1]
+    offset = 100 * imsize
 
     avInt = []
     unInt = []
-    for i in range(nfilt-2):
-        # print("i: ", i, ", file: ", files[i])
+    for i in range(nfilt-1):
         img = io.imread(files[i]).astype(np.int64)
-        # intPx = (imroi.sum() - offset) / roiSize
-        imsig = img - imdark                            #  Live subtract imdark (filter 2)
-        imroi = imsig[roi[0]:roi[1], roi[2]:roi[3]]
-        intPx = imsig.sum()/roiSize
+        img[~circ_mask] = 0
+        img = img - imdark
+
+        if roi != None:
+            img = img[roi[0]:roi[1], roi[2]:roi[3]]
+
+        intPx = (img.sum() - offset) / imsize
         avInt.append(intPx)
         
-        unPx = np.sqrt((imroi**2).sum()) / roiSize
+        unPx = np.sqrt((img**2).sum()) / imsize
         unInt.append(unPx)
 
     avInt = np.array(avInt)
@@ -47,8 +58,6 @@ def prepare_spectrum(files, roi):
 
     unInt /= filtQE
     # unInt /= (filtUn*2)
-
-
     return cntQe, unInt
 
 
