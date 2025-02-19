@@ -148,6 +148,29 @@ def test_position(initPos, step):
         time.sleep(45)
         exit
 
+def dummy_autofocus(files, flag_plot=False):
+    metric = []
+
+    # img0 = self.camera.get_frame()    # For live autofocus
+    img0 = io.imread(files[0]).astype(np.int16)
+    _, best_area, best_region = find_fov(img0)
+    circ_mask = offset_circular_mask(img0, best_region, best_area, flag_plot=flag_plot)
+
+    # for n in nsteps:
+        # motor.move(n)
+        # img = self.camera.get_frame()
+    for f in files:
+        img = io.imread(f).astype(np.int16) 
+        img[~circ_mask] = 0
+        img = exposure.equalize_hist(img)
+        metric.append(laplacian(img))
+
+    if flag_plot:
+        plt.plot(metric, 'o-')
+        plt.legend()
+
+    # return np.argmin(metric), metric
+    return metric
 
 def main(path0):
     print("Initialize camera")
